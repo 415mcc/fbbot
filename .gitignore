@@ -1,3 +1,4 @@
+# Beginning of Github Generated .gitignore
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -60,3 +61,6 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+# End of Github Generated .gitignore
+
+.idea/
