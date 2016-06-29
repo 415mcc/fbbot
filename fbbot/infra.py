@@ -1,11 +1,11 @@
-from bs4 import BeautifulSoup
 from collections import namedtuple
 from urllib.parse import urljoin, urlsplit
 
+from bs4 import BeautifulSoup
 import requests
 
 
-class Session(object):
+class Session:
     FormInfo = namedtuple('FormInfo', ['params', 'post_url'])
 
     def __init__(self, settings):
@@ -65,7 +65,7 @@ class Session(object):
         self.req.post(fd.post_url, data=fd.params)
 
 
-class Settings(object):
+class Settings:
     def __init__(self, username, password):
         self.username = username
         self.password = password
