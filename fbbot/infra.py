@@ -1,9 +1,13 @@
 from bs4 import BeautifulSoup
 from collections import namedtuple
+from urllib.parse import urljoin, urlsplit
+
 import requests
 
 
 class Session(object):
+    FormInfo = namedtuple('FormInfo', ['params', 'post_url'])
+
     def __init__(self, settings):
         self.settings = settings
         self.req = requests.Session()
@@ -11,51 +15,54 @@ class Session(object):
             'User-Agent': self.settings.user_agent,
         })
 
-    # TODO: add support for relative URLs
     @staticmethod
-    def __form_data(text, formid, params, soup=None):
+    def __form_data(text, formid, params, soup=None, form_url=None):
+        if type(params) is not dict:
+            raise TypeError('Params must be a dict')
         if soup is None:
             soup = BeautifulSoup(text, 'html.parser')
         form = soup.find('form', attrs={'id': formid})
         action = form.attrs.get('action')
+        if not urlsplit(action).netloc:
+            if form_url is None or not urlsplit(form_url).netloc:
+                raise ValueError('kwarg form_url must be specified if form '
+                                 'action lacks a host')
+            action = urljoin(form_url, action)
         inputs = form.find_all('input') + form.find_all('textarea')
         for i in inputs:
             try:
                 name = i.attrs['name']
                 type_ = i.attrs['type']
+                value = params.get(name)
                 if type_ == 'submit':
                     continue
                 elif type_ == 'hidden':
-                    value = i.attrs['value']
-                else:
-                    value = params.get(name)
-                    if value is None:
-                        raise ValueError('Parameter dictionary is missing a '
-                                         'value for a non-hidden field.')
+                    value = i.attrs['value'] if value is None else value
+                elif value is None:
+                    raise ValueError('kwarg params dictionary is missing a '
+                                     'value for a non-hidden field')
             except KeyError:
                 pass
             else:
                 params[name] = value
-        return namedtuple('FormInfo', ['params', 'post_url'])(params=params,
-                                                              post_url=action)
+        return Session.FormInfo(params=params, post_url=action)
 
     def login(self):
-        lp = self.req.get('https://mbasic.facebook.com/login.php')
+        login_url = 'https://mbasic.facebook.com/login.php'
+        lp = self.req.get(login_url)
         fd = Session.__form_data(lp.text, 'login_form', {
             'email': self.settings.username,
             'pass': self.settings.password,
-        })
+        }, form_url=login_url)
         self.req.post(fd.post_url, data=fd.params)
 
     def message(self, user_id, body):
-        mp = self.req.get('https://mbasic.facebook.com/messages/compose/',
-                          params={'ids': user_id})
+        msg_url = 'https://mbasic.facebook.com/messages/compose/'
+        mp = self.req.get(msg_url, params={'ids': user_id})
         fd = Session.__form_data(mp.text, 'composer_form', {
             'body': body,
-        })
-        # bodge because __form_data doesn't support relative urls yet
-        self.req.post('https://mbasic.facebook.com' +
-                      fd.post_url, data=fd.params)
+        }, form_url=msg_url)
+        self.req.post(fd.post_url, data=fd.params)
 
 
 class Settings(object):
