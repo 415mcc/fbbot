@@ -47,22 +47,28 @@ class Session:
                 params[name] = value
         return Session.FormInfo(params=params, post_url=action)
 
-    def login(self):
-        login_url = 'https://mbasic.facebook.com/login.php'
-        lp = self.req.get(login_url)
-        fd = Session.__form_data(lp.text, 'login_form', {
-            'email': self.settings.username,
-            'pass': self.settings.password,
-        }, form_url=login_url)
+    def __complete_form(self, form_url, form_id, params, get_params={}):
+        page = self.req.get(form_url, params=get_params)
+        fd = Session.__form_data(page.text, form_id, params, form_url=form_url)
         self.req.post(fd.post_url, data=fd.params)
 
+    def login(self):
+        self.__complete_form(
+            'https://mbasic.facebook.com/login.php',
+            'login_form',
+            {
+                'email': self.settings.username,
+                'pass': self.settings.password,
+            },
+        )
+
     def message(self, user_id, body):
-        msg_url = 'https://mbasic.facebook.com/messages/compose/'
-        mp = self.req.get(msg_url, params={'ids': user_id})
-        fd = Session.__form_data(mp.text, 'composer_form', {
-            'body': body,
-        }, form_url=msg_url)
-        self.req.post(fd.post_url, data=fd.params)
+        self.__complete_form(
+            'https://mbasic.facebook.com/messages/compose/',
+            'composer_form',
+            {'body': body},
+            get_params={'ids': user_id},
+        )
 
 
 class Settings:
