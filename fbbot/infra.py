@@ -1,18 +1,32 @@
+import functools
+
 from collections import namedtuple
 from urllib.parse import urljoin, urlsplit
 
-from bs4 import BeautifulSoup
 import requests
+
+from bs4 import BeautifulSoup
+
+
+def only_if_logged_in(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if (not self._logged_in):
+            raise PermissionError('must login before calling {}()'
+                                  .format(func.__name__))
+        return func(self, *args, **kwargs)
+    return wrapper
 
 
 class Session:
     FormInfo = namedtuple('FormInfo', ['params', 'post_url'])
 
     def __init__(self, settings):
-        self.settings = settings
+        self._logged_in = False
+        self._settings = settings
         self.req = requests.Session()
         self.req.headers.update({
-            'User-Agent': self.settings.user_agent,
+            'User-Agent': self._settings.user_agent,
         })
 
     @staticmethod
@@ -49,19 +63,23 @@ class Session:
 
     def __complete_form(self, form_url, form_id, params, get_params={}):
         page = self.req.get(form_url, params=get_params)
+        page.raise_for_status()
         fd = Session.__form_data(page.text, form_id, params, form_url=form_url)
-        self.req.post(fd.post_url, data=fd.params)
+        post = self.req.post(fd.post_url, data=fd.params)
+        post.raise_for_status()
 
     def login(self):
         self.__complete_form(
             'https://mbasic.facebook.com/login.php',
             'login_form',
             {
-                'email': self.settings.username,
-                'pass': self.settings.password,
+                'email': self._settings.username,
+                'pass': self._settings.password,
             },
         )
+        self._logged_in = True
 
+    @only_if_logged_in
     def message(self, user_id, body):
         self.__complete_form(
             'https://mbasic.facebook.com/messages/compose/',
@@ -75,4 +93,4 @@ class Settings:
     def __init__(self, username, password):
         self.username = username
         self.password = password
-        self.user_agent = "Mozilla/5.0"
+        self.user_agent = 'Mozilla/5.0'
